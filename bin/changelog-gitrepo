@@ -1,0 +1,107 @@
+#!/bin/sh
+Have() {
+	command -v "$1" >/dev/null 2>&1
+}
+Echo() {
+	printf '%s\n' "$*"
+}
+Fatal() {
+	Echo "${0##*/}: fatal: $*" >&2
+	exit 1
+}
+Usage() {
+	Echo "${0##*/} ([category/]package|subdirectory)[::repository]"
+	exit ${0:-1}
+}
+newline='
+'
+tab='  '
+Main() {
+	changed=
+	while :
+	do	read -r a file
+		[ -n "${file:-}" ] || break
+		case $a in
+		'A')
+			changed=$changed${changed:+,\ }'+'$file;;
+		'D')
+			changed=$changed${changed:+,\ }'-'$file;;
+		'M')
+			changed=$changed${changed:+,\ }$file;;
+		*)
+			break;;
+		esac
+	done
+	[ -n "${changed:++}" ] || {
+		cat >/dev/null
+		return 0
+	}
+	message=
+	current=
+	while read -r a
+	do	case $current in
+		' (Signed Manifest commit)'|' (Unsigned Manifest commit)')
+			:;;
+		'(Portage version:'*|'Package-Manager:'*)
+			:;;
+		'Signed-off-by:'*|'RepoMan-Options:'*)
+			:;;
+		'')
+			[ -n "$a" ] || continue
+			message=$newline$message;;
+		*)
+			message=$tab$current$newline$message;;
+		esac
+		current=$a
+	done
+	while :
+	do	case $message in
+		*"$newline")
+			message=${message%"$newline"};;
+		*)
+			break;;
+		esac
+	done
+	Echo "$current $changed:" | fold -s -w 77 | while read a
+	do	[ -z "$a" ] || Echo "$tab$a"
+	done
+	Echo "$message$newline"
+}
+
+[ $# -eq 1 ] || Usage
+case $1 in
+*::*)
+	name=${1%::*}
+	repository=${1##*::};;
+*)
+	name=$1
+	repository=gentoo;;
+esac
+if Have eix-header
+then	dir=`eix-header -p "$repository"` && dir=${dir%/}
+else	dir=`portageq get_repo_path / "$repository"`
+fi && [ -n "$dir" ] || Fatal "cannot determine path of repository $repository"
+test -d "$dir" && cd "$dir" >/dev/null || Fatal "cannot cd to $dir"
+name=${name%/}
+case $name in
+*/*)
+	cat_package=$name;;
+*)
+	if test -r "./$name"
+	then	cat_package=$name
+	else	Have eix || Fatal 'omission of category/ is only admissible if eix is installed'
+		cat_package=`COUNT_ONLY_PRINTED=false eix --only-names --brief -e "$name"` \
+			&& [ -n "$cat_package" ] \
+			|| Fatal "cannot determine category of package $1"
+	fi;;
+esac
+test -r "./$cat_package" \
+	|| Fatal "$cat_package does not exist in repository $repository"
+Echo "# ChangeLog for $cat_package::$repository
+"
+git rev-list HEAD -- "$cat_package" | while read commit
+do	git diff-tree --name-status --no-renames --date='format:%d %b %Y;' \
+		--format='%cd %cN <%cE>%n%B' \
+		--root \
+		--relative="$cat_package" -r "$commit" -- . | tac | Main
+done
