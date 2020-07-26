@@ -1,9 +1,10 @@
 
 changelog-gitrepo - Create ChangeLog data for gentoo repositories from git
 
-Author: Martin Väth <martin@mvath.de>
+Author: Martin Väth <martin at mvath.de>
 
 The license of this project is GNU Public License v2.
+SPDX-License-Identifier: GPL-2.0-only
 
 For git repositories, ChangeLog files usually do not exist in Gentoo
 repositories, since essentially these just copy the git commit messages.

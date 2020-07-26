@@ -1,4 +1,7 @@
 #!/bin/sh
+# (C) Martin V\"ath <martin at mvath.de>
+# SPDX-License-Identifier: GPL-2.0-only
+
 Have() {
 	command -v "$1" >/dev/null 2>&1
 }
